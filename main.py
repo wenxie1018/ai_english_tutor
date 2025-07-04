@@ -4,11 +4,12 @@ import os
 import re
 import traceback
 from typing import List, Optional, Dict, Any, Union
+import asyncio  # 【新增】導入 asyncio 模組
 
 # --- 1. FastAPI 和 Pydantic 相關導入 ---
 from fastapi import FastAPI, Form, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError # 【新增】導入 ValidationError
 
 # --- Google Cloud 和 Vertex AI 相關導入 ---
 from google.cloud import vision
@@ -23,8 +24,7 @@ load_dotenv()
 # ==============================================================================
 # 2. PYDANTIC 模型 (保持不變)
 # ==============================================================================
-# ... (此處省略所有 Pydantic 模型定義，與前一版本相同) ...
-# --- "段落寫作評閱" 的模型 ---
+# ... (您的所有 Pydantic 模型定義保持不變，此處省略) ...
 class ErrorAnalysisItem(BaseModel):
     original_sentence: str
     error_type: str
@@ -116,6 +116,7 @@ class WorksheetResponse(BaseModel):
 
 # 使用 Union 來定義路由可能返回的多種類型，增強類型提示
 ApiResponse = Union[ParagraphResponse, QuizResponse, WorksheetResponse]
+
 
 # ==============================================================================
 # 3. FastAPI 應用初始化與配置 (保持不變)
@@ -521,11 +522,14 @@ mock_reading_writing_structure = {
         "overall_feedback_title": "📚 總結性回饋建議（可複製給學生）",
         "overall_feedback": "[針對學生考卷的作答整體表現生成正面總結性回饋]"
         }
+
+
 # ==============================================================================
-# 4. 異步輔助函數 (增加了 print 語句)
+# 4. 異步輔助函數 (保持不變)
 # ==============================================================================
 
 async def perform_ocr(image_file: UploadFile) -> str:
+    # ... (此函式保持不變)
     if not image_file or not image_file.filename:
         return "OCR_ERROR: 未提供圖片檔案。"
     try:
@@ -547,6 +551,7 @@ async def perform_ocr(image_file: UploadFile) -> str:
         return f"OCR_ERROR: {str(e)}"
 
 async def get_gcs_blob_text(bucket_name: str, file_path: str) -> Optional[str]:
+    # ... (此函式保持不變)
     try:
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(file_path)
@@ -572,6 +577,7 @@ async def get_standard_answer_from_gcs(
     answer_map: Dict[str, str],
     lookup_key: str
 ) -> Optional[Dict[str, Any]]:
+    # ... (此函式保持不變)
     """從 GCS 獲取指定主題的標準答案 JSON。"""
     file_key = f"{grade_level}{category_key}"
     target_filename = answer_map.get(file_key)
@@ -600,6 +606,7 @@ async def get_standard_answer_from_gcs(
         return None
     
 def get_json_format_example(submission_type: str) -> str:
+    # ... (此函式保持不變)
     """根據提交類型返回對應的 JSON 格式範例字串。"""
     examples = {
         '測驗寫作評改': mock_quiz_data_for_structure,
@@ -610,11 +617,9 @@ def get_json_format_example(submission_type: str) -> str:
     # 如果類型未知，默認為段落寫作
     mock_data = examples.get(submission_type, mock_paragraph_data_for_structure)
     return json.dumps(mock_data, ensure_ascii=False, indent=2)
-        
-# ... (其他輔助函數 get_standard_answer_from_gcs 和 get_json_format_example 保持不變) ...
 
 # ==============================================================================
-# 5. 主要 API 路由 (增加了 print 語句)
+# 5. 主要 API 路由 (【重大修改】)
 # ==============================================================================
 
 @app.post("/api/grade", response_model=ApiResponse, tags=["評分"])
@@ -638,19 +643,14 @@ async def grade_writing(
     print("="*80 + "\n")
 
     try:
-        # --- 階段 1: 打印收到的請求參數 ---
+        # --- 階段 1 到 5: 準備工作 (將原程式碼複製到這裡) ---
+        # (此處省略了從 "階段 1" 到 "階段 5" 的所有程式碼，因為它們保持不變)
+        # 確保在執行完這些步驟後，您已經準備好了 `contents_for_gemini` 列表。
+        # --- START of PREPARATION CODE ---
         print("--- [1. 接收到的請求參數] ---")
         print(f"  - submissionType: {submissionType}")
-        print(f"  - gradeLevel: {gradeLevel}")
-        print(f"  - text: {'(有內容)' if text else '(無)'}")
-        print(f"  - bookrange: {bookrange or '(無)'}")
-        print(f"  - learnsheets: {learnsheets or '(無)'}")
-        print(f"  - worksheetCategory: {worksheetCategory or '(無)'}")
-        print(f"  - essayImage: {len(essayImage)} 個檔案")
-        print(f"  - learningSheetFile: {len(learningSheetFile)} 個檔案")
-        print(f"  - readingWritingFile: {len(readingWritingFile)} 個檔案")
-        print(f"  - standardAnswerImage: {len(standardAnswerImage)} 個檔案\n")
-        
+        # ... (複製您原有的所有參數打印)
+
         contents_for_gemini: List[Part] = []
         essay_content = ""
         
@@ -659,7 +659,6 @@ async def grade_writing(
         elif submissionType == '學習單批改': student_files = learningSheetFile
         elif submissionType == '讀寫習作評分': student_files = readingWritingFile
         
-        # --- 階段 2: 處理學生作業內容 ---
         print("--- [2. 處理學生作業內容 (OCR 或文字)] ---")
         if text:
             essay_content = text
@@ -667,15 +666,19 @@ async def grade_writing(
         elif student_files:
             print("  - 正在處理上傳的圖片檔案...")
             ocr_results = []
+            # 【修改】使用 asyncio.gather 並行處理 OCR，提高效率
+            ocr_tasks = [perform_ocr(file) for file in student_files]
+            all_ocr_texts = await asyncio.gather(*ocr_tasks)
+
             contents_for_gemini.append(Part.from_text("以下是學生提交的原始作業圖片，供您參考其版面和手寫內容："))
-            for file in student_files:
-                await file.seek(0)
-                ocr_text = await perform_ocr(file)
+            for i, file in enumerate(student_files):
+                ocr_text = all_ocr_texts[i]
                 if "OCR_ERROR:" not in ocr_text and ocr_text.strip():
                     ocr_results.append(ocr_text)
                 await file.seek(0)
                 image_data = await file.read()
                 contents_for_gemini.append(Part.from_data(data=image_data, mime_type=file.content_type))
+            
             if not ocr_results: raise HTTPException(status_code=400, detail="所有圖片的 OCR 均失敗，且未提供純文字輸入。")
             essay_content = "\n\n".join(ocr_results)
         else:
@@ -683,6 +686,7 @@ async def grade_writing(
         
         print(f"\n  [作業內容預覽 (前 300 字)]:\n---\n{essay_content[:300]}\n---\n")
 
+        # ... (複製您原有的 "階段 3", "階段 4", "階段 5" 的所有程式碼)
         # --- 階段 3: 處理標準答案 (若有) ---
         print("--- [3. 處理標準答案] ---")
         processed_standard_answer = ""
@@ -705,7 +709,6 @@ async def grade_writing(
         print("--- [4. 從 GCS 獲取結構化答案] ---")
         standard_answers_json_str = ""
 
-        # 【修正】將這段邏輯加回來
         if submissionType == '學習單批改' and learnsheets and worksheetCategory:
             print(f"  - 條件滿足，嘗試為「學習單批改」載入答案...")
             answer_map = { 
@@ -716,15 +719,9 @@ async def grade_writing(
                 "八年級差異化學習單參考答案":"差異化學習單參考答案(01_2下).txt", 
                 "九年級差異化學習單參考答案":"差異化學習單參考答案(01_3下).txt" 
             }
-            # 之前這裡缺少了 get_standard_answer_from_gcs 這個輔助函數的實現
-            # 我們假設這個函數存在，如果不存在需要加回來
             standard_answers_data = await get_standard_answer_from_gcs(
-                GCS_PROMPT_BUCKET_NAME, 
-                "ai_english_file/", 
-                gradeLevel, 
-                worksheetCategory, 
-                answer_map, 
-                learnsheets
+                GCS_PROMPT_BUCKET_NAME, "ai_english_file/", gradeLevel, 
+                worksheetCategory, answer_map, learnsheets
             )
             if standard_answers_data:
                 standard_answers_json_str = json.dumps(standard_answers_data, ensure_ascii=False, indent=2)
@@ -737,17 +734,12 @@ async def grade_writing(
                 "九年級讀寫習作參考答案": "113_3習作標準答案.txt" 
             }
             standard_answers_data = await get_standard_answer_from_gcs(
-                GCS_PROMPT_BUCKET_NAME, 
-                "ai_english_file/", 
-                gradeLevel, 
-                "讀寫習作參考答案", 
-                answer_map, 
-                bookrange
+                GCS_PROMPT_BUCKET_NAME, "ai_english_file/", gradeLevel, 
+                "讀寫習作參考答案", answer_map, bookrange
             )
             if standard_answers_data:
                 standard_answers_json_str = json.dumps(standard_answers_data, ensure_ascii=False, indent=2)
 
-        # 檢查結果
         if standard_answers_json_str:
             print(f"\n  [GCS 答案預覽 (前 200 字)]:\n---\n{standard_answers_json_str[:200]}\n---\n")
         else:
@@ -763,11 +755,8 @@ async def grade_writing(
         if not base_prompt_text: raise HTTPException(status_code=500, detail="從 GCS 載入 Prompt 模板失敗。")
         
         final_prompt_text = base_prompt_text.format(
-            Book=bookrange or "",
-            learnsheet=learnsheets or "",
-            grade_level=gradeLevel,
-            submission_type=submissionType,
-            essay_content=essay_content,
+            Book=bookrange or "", learnsheet=learnsheets or "", grade_level=gradeLevel,
+            submission_type=submissionType, essay_content=essay_content,
             standard_answer_if_any=processed_standard_answer,
             scoring_instructions_if_any=scoringInstructions or "",
             json_format_example_str=get_json_format_example(submissionType),
@@ -775,20 +764,22 @@ async def grade_writing(
         )
         contents_for_gemini.insert(0, Part.from_text(final_prompt_text))
         
-        # 打印最終的 Prompt (不含冗長的 JSON 範例)
         prompt_preview = final_prompt_text.split("JSON 輸出格式範例：")[0]
         print("\n  [最終 Prompt 預覽 (發送給 Gemini 的內容)]:")
         print("-" * 50)
         print(prompt_preview)
         print("-" * 50 + "\n")
+        # --- END of PREPARATION CODE ---
 
-        # --- 階段 6: 呼叫 Gemini API ---
+        # --- 【修改】階段 6: 使用非阻塞方式呼叫 Gemini API ---
         print("--- [6. 呼叫 Gemini API] ---")
-        generation_config = { "temperature": 0.1, "top_p": 0.5, "max_output_tokens": 8192, "response_mime_type": "application/json" }
+        generation_config = { "temperature": 0.1, "top_p": 0.5, "max_output_tokens": 16348, "response_mime_type": "application/json" }
         safety_settings = { category: HarmBlockThreshold.BLOCK_NONE for category in HarmCategory }
         
-        print("  - 正在發送請求...")
-        response = gemini_model.generate_content(
+        print("  - 正在背景執行緒中發送請求...")
+        # 【修改】使用 asyncio.to_thread 執行同步函式，避免阻塞
+        response = await asyncio.to_thread(
+            gemini_model.generate_content,
             contents_for_gemini,
             generation_config=generation_config,
             tools=tools_list,
@@ -796,72 +787,99 @@ async def grade_writing(
         )
         print("  - 已收到 Gemini 回應。\n")
 
-        # --- 階段 7: 處理並返回結果 ---
+        # --- 【修改】階段 7: 增強的 API 回應處理 ---
         print("--- [7. 處理 API 回應] ---")
 
-        # 檢查是否有任何候選回應
+        print(f"  [DEBUG] 完整的 Gemini Response 物件: {response}") # 這行日誌仍然很有用，保留它
+
+        # 【修改】更健壯的檢查，判斷是否被攔截
         if not response.candidates:
-            # 獲取被攔截的原因
             reason = "未知原因"
-            if response.prompt_feedback and hasattr(response.prompt_feedback, 'block_reason'):
-                reason = response.prompt_feedback.block_reason
+            if response.prompt_feedback and response.prompt_feedback.block_reason:
+                reason = response.prompt_feedback.block_reason.name
             
-            # 記錄詳細日誌並返回具體的錯誤訊息給前端
-            error_detail = f"AI 模型未返回任何回應，可能已被安全設定阻擋。原因: {reason}"
+            error_detail = f"AI 模型未返回任何內容，可能已被安全設定阻擋。原因: {reason}"
+            print(f"!!! ERROR: {error_detail}")
+
+            if response.prompt_feedback.safety_ratings:
+                print("  --- 安全評分詳情 ---")
+                for rating in response.prompt_feedback.safety_ratings:
+                    print(f"    - Category: {rating.category.name}, Probability: {rating.probability.name}")
+                print("  --------------------")
+            
+            raise HTTPException(status_code=500, detail=error_detail)
+
+        # ======================= 【重大修改】 =======================
+        # 手動遍歷 parts 列表，拼接所有文本內容，以應對 "Multiple content parts" 的情況
+        # 這比直接使用 response.text 更可靠
+        try:
+            response_text = "".join(part.text for part in response.candidates[0].content.parts)
+        except Exception as e:
+            # 如果在拼接過程中出現任何問題（雖然可能性很低），給出明確的錯誤
+            error_detail = f"從 AI 回應中提取文本時出錯: {e}. Response: {response}"
+            print(f"!!! ERROR: {error_detail}")
+            raise HTTPException(status_code=500, detail=error_detail)
+        # ==========================================================
+
+        print(f"  [Gemini 拼接後的回應預覽 (前 500 字)]:\n---\n{response_text[:500]}\n---\n")
+
+        # 檢查回應是否為空字串
+        if not response_text.strip():
+            error_detail = "AI 模型返回了空的文本內容，但未報告攔截。請檢查輸入或 Prompt。"
             print(f"!!! ERROR: {error_detail}")
             raise HTTPException(status_code=500, detail=error_detail)
 
-        # 獲取回應文字
-        response_text = "".join(part.text for part in response.candidates[0].content.parts)
-        print(f"  [Gemini 原始回應預覽 (前 500 字)]:\n---\n{response_text[:500]}\n---\n")
-
+        # 【新增】從拼接後的文本中提取 JSON 內容
+        # 這個正則表達式可以處理被 ```json ... ``` 包裹的情況
         json_match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
-        cleaned_text = json_match.group(1) if json_match else response_text.strip()
-
-        # ======================= 【關鍵修正】 =======================
-        # 在執行 json.loads 之前，檢查 cleaned_text 是否為空或無效
-        if not cleaned_text or not cleaned_text.strip().startswith(('{', '[')):
-            error_detail = "AI 模型返回了空的或無效的 JSON 內容。"
-            # 在伺服器日誌中記錄完整的原始回應，方便排錯
-            print(f"!!! ERROR: {error_detail}")
-            print(f"--- Gemini 原始無效回應 ---")
-            print(response_text)
-            print(f"--------------------------")
-            # 返回一個更友善的錯誤給前端
-            raise HTTPException(status_code=500, detail=f"{error_detail} 請檢查輸入內容或稍後再試。")
-        # ==========================================================
+        if json_match:
+            cleaned_text = json_match.group(1)
+        else:
+            # 如果沒有 ```json，就假設整個文本都是 JSON（或者至少嘗試解析它）
+            # 這需要找到第一個 '{'，因為前面可能有 "Here is the JSON..." 這樣的文字
+            first_brace_index = response_text.find('{')
+            if first_brace_index != -1:
+                cleaned_text = response_text[first_brace_index:]
+            else:
+                # 如果連 '{' 都找不到，那就肯定是無效的
+                 raise HTTPException(status_code=500, detail="AI 回應中未找到有效的 JSON 內容。")
 
         try:
             ai_json = json.loads(cleaned_text)
-            print("  - JSON 解析成功，準備返回結果。")
-            # ... (後續的返回邏輯)
+            print("  - JSON 解析成功，準備根據類型進行 Pydantic 驗證。")
+            
+            # ... 後續的 Pydantic 驗證和返回邏輯保持不變 ...
+            if submissionType == '段落寫作評閱':
+                return ParagraphResponse.model_validate(ai_json)
+            elif submissionType == '測驗寫作評改':
+                return QuizResponse.model_validate(ai_json)
+            elif submissionType in ['學習單批改', '讀寫習作評分']:
+                return WorksheetResponse.model_validate(ai_json)
+            else:
+                return ai_json
 
         except json.JSONDecodeError as e:
-            # 處理雖然不是空，但格式錯誤的 JSON
-            error_detail = f"AI 模型返回的 JSON 格式錯誤: {e}"
+            error_detail = f"AI 模型返回的內容不是有效的 JSON 格式: {e}"
             print(f"!!! ERROR: {error_detail}")
-            print(f"--- Gemini 格式錯誤的 JSON ---")
-            print(cleaned_text)
+            print(f"--- Gemini 格式錯誤的內容 ---")
+            print(cleaned_text) # 打印清理後的文本，更容易定位錯誤
+            print(f"------------------------------")
+            raise HTTPException(status_code=500, detail=error_detail)
+        except ValidationError as e:
+            error_detail = f"AI 返回的 JSON 結構不符合 Pydantic 模型要求: {e}"
+            print(f"!!! ERROR: {error_detail}")
+            print(f"--- Gemini 結構錯誤的 JSON ---")
+            print(json.dumps(ai_json, indent=2, ensure_ascii=False)) # 打印格式化的JSON以便檢查
             print(f"------------------------------")
             raise HTTPException(status_code=500, detail=error_detail)
 
 
-        print("\n" + "="*80)
-        print("||" + " " * 31 + "請求處理完成" + " " * 31 + "||")
-        print("="*80 + "\n")
-
-        if submissionType == '段落寫作評閱': return ParagraphResponse.model_validate(ai_json)
-        elif submissionType == '測驗寫作評改': return QuizResponse.model_validate(ai_json)
-        elif submissionType in ['學習單批改', '讀寫習作評分']: return WorksheetResponse.model_validate(ai_json)
-        else: return ai_json
-
     except Exception as e:
-        # 統一的錯誤處理，打印 traceback 並返回 HTTP 錯誤
+        # 統一的錯誤處理
         print("\n" + "!"*80)
         print("!!!" + " " * 31 + "請求處理時發生錯誤" + " " * 31 + "!!!")
         print("!"*80 + "\n")
         traceback.print_exc()
-        # 如果是 HTTPException，就重新拋出它，否則包裝成一個通用的 500 錯誤
         if isinstance(e, HTTPException):
             raise e
         else:
@@ -870,4 +888,4 @@ async def grade_writing(
 # ==============================================================================
 # 6. 伺服器運行說明 (保持不變)
 # ==============================================================================
-# ... (此處省略運行說明) ...
+# ... (保持不變) ...
