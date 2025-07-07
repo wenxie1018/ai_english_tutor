@@ -789,7 +789,13 @@ async def grade_writing(
         # --- 【修改】階段 6: 使用非阻塞方式呼叫 Gemini API ---
         print("--- [6. 呼叫 Gemini API] ---")
         generation_config = { "temperature": 0.1, "top_p": 0.5, "max_output_tokens": 16348}
-        safety_settings = { category: HarmBlockThreshold.BLOCK_NONE for category in HarmCategory }
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+        }
         
         print("  - 正在背景執行緒中發送請求...")
         # 【修改】使用 asyncio.to_thread 執行同步函式，避免阻塞
