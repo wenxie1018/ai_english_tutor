@@ -323,7 +323,7 @@ mock_learning_sheet_structure = {
             "questions_feedback": [
                 {
                 "question_number": "1",
-                "student_answer": "[學生實際的答案]",
+                "student_answer": "[學生實際的完整答案]",
                 "is_correct": "[✅/❌]",
                 "comment": "[根據學生答案正確或錯誤生成內容]",
                 "correct_answer": "[[標準答案]中對應題號的正確答案]",
@@ -332,7 +332,7 @@ mock_learning_sheet_structure = {
                 },
                 {
                 "question_number": "2",
-                "student_answer": "[學生實際的答案]",
+                "student_answer": "[學生實際的完整答案]",
                 "is_correct": "[✅/❌]",
                 "comment": "[根據學生答案正確或錯誤生成內容]",
                 "correct_answer": "[[標準答案]中對應題號的正確答案]",
@@ -347,7 +347,7 @@ mock_learning_sheet_structure = {
             "questions_feedback": [
                 {
                 "question_number": "1",
-                "student_answer": "[學生實際的答案]",
+                "student_answer": "[學生實際的完整答案]",
                 "is_correct": "[✅/❌]",
                 "comment": "[根據學生答案正確或錯誤生成內容]",
                 "correct_answer": "[[標準答案]中對應題號的正確答案]",
@@ -362,7 +362,7 @@ mock_learning_sheet_structure = {
             "questions_feedback": [
                 {
                 "question_number": "1",
-                "student_answer": "[學生實際的答案]",
+                "student_answer": "[學生實際的完整答案]",
                 "is_correct": "[✅/❌]",
                 "comment": "[根據學生答案正確或錯誤生成內容]",
                 "correct_answer": "[[標準答案]中對應題號的正確答案]",
@@ -377,7 +377,7 @@ mock_learning_sheet_structure = {
             "questions_feedback": [ 
                 {
                 "question_number": "1", 
-                "student_answer": "[學生實際的答案]",
+                "student_answer": "[學生實際的完整答案]",
                 "is_correct": "[✅/❌]", 
                 "comment": "[根據學生答案正確或錯誤生成內容]",
                 "correct_answer": "[[標準答案]中對應題號的正確答案]",
@@ -773,7 +773,7 @@ async def grade_writing(
 
         # --- 【修改】階段 6: 使用非阻塞方式呼叫 Gemini API ---
         print("--- [6. 呼叫 Gemini API] ---")
-        generation_config = { "temperature": 0.1, "top_p": 0.5, "max_output_tokens": 16348, "response_mime_type": "application/json" }
+        generation_config = { "temperature": 0.1, "top_p": 0.5, "max_output_tokens": 16348}
         safety_settings = { category: HarmBlockThreshold.BLOCK_NONE for category in HarmCategory }
         
         print("  - 正在背景執行緒中發送請求...")
