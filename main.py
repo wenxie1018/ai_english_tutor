@@ -5,7 +5,6 @@ import re
 import traceback
 from typing import List, Optional, Dict, Any, Union
 import asyncio  # 【新增】導入 asyncio 模組
-import google.api_core.client_options
 
 # --- 1. FastAPI 和 Pydantic 相關導入 ---
 from fastapi import FastAPI, Form, File, UploadFile, HTTPException
@@ -85,7 +84,7 @@ class QuestionFeedback(BaseModel):
     student_answer: str
     is_correct: str
     comment: str
-    correct_answer: Union[str, List[str]]
+    correct_answer: str
     answer_source_query: str
     answer_source_content: str
 
@@ -157,21 +156,7 @@ DATASTORE_RESOURCE_NAME = f"projects/{GCP_PROJECT_ID}/locations/{DATASTORE_COLLE
 
 # --- 在應用程式啟動時初始化 Google Cloud 客戶端 ---
 try:
-    # 【修改】設定客戶端選項，指定 API 端點和超時時間
-    client_options = google.api_core.client_options.ClientOptions(
-        api_endpoint=f"{GCP_LOCATION}-aiplatform.googleapis.com",
-    )
-
-    # 【修改】在初始化 Vertex AI 時傳入客戶端選項和更長的超時時間
-    # 將超時時間從預設的 60 秒延長到 300 秒 (5 分鐘)
-    vertexai.init(
-        project=GCP_PROJECT_ID, 
-        location=GCP_LOCATION, 
-        client_options=client_options,
-        # 新增 generation API 的超時設定
-        generation_client_timeout=300 
-    )
-
+    vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
     vision_client = vision.ImageAnnotatorClient()
     storage_client = storage.Client(project=GCP_PROJECT_ID)
 
@@ -180,7 +165,7 @@ try:
         grounding.Retrieval(grounding.VertexAISearch(datastore=DATASTORE_RESOURCE_NAME))
     )
     tools_list = [search_tool]
-    print("Vertex AI 和 Google Cloud 客戶端初始化成功 (已設定 5 分鐘超時)。")
+    print("Vertex AI 和 Google Cloud 客戶端初始化成功。")
 
 except Exception as e:
     print(f"嚴重錯誤: 初始化 Google Cloud 客戶端失敗: {e}")
@@ -392,7 +377,7 @@ mock_learning_sheet_structure = {
             "questions_feedback": [ 
                 {
                 "question_number": "1", 
-                "student_answer": "[學生實際的完整答案]",
+                "student_answer": "[學生實際的答案]",
                 "is_correct": "[✅/❌]", 
                 "comment": "[根據學生答案正確或錯誤生成內容]",
                 "correct_answer": "[[標準答案]中對應題號的正確答案]",
