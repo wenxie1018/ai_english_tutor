@@ -5,6 +5,7 @@ import re
 import traceback
 from typing import List, Optional, Dict, Any, Union
 import asyncio  # 【新增】導入 asyncio 模組
+import google.api_core.client_options
 
 # --- 1. FastAPI 和 Pydantic 相關導入 ---
 from fastapi import FastAPI, Form, File, UploadFile, HTTPException
@@ -156,7 +157,21 @@ DATASTORE_RESOURCE_NAME = f"projects/{GCP_PROJECT_ID}/locations/{DATASTORE_COLLE
 
 # --- 在應用程式啟動時初始化 Google Cloud 客戶端 ---
 try:
-    vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
+    # 【修改】設定客戶端選項，指定 API 端點和超時時間
+    client_options = google.api_core.client_options.ClientOptions(
+        api_endpoint=f"{GCP_LOCATION}-aiplatform.googleapis.com",
+    )
+
+    # 【修改】在初始化 Vertex AI 時傳入客戶端選項和更長的超時時間
+    # 將超時時間從預設的 60 秒延長到 300 秒 (5 分鐘)
+    vertexai.init(
+        project=GCP_PROJECT_ID, 
+        location=GCP_LOCATION, 
+        client_options=client_options,
+        # 新增 generation API 的超時設定
+        generation_client_timeout=300 
+    )
+
     vision_client = vision.ImageAnnotatorClient()
     storage_client = storage.Client(project=GCP_PROJECT_ID)
 
@@ -165,7 +180,7 @@ try:
         grounding.Retrieval(grounding.VertexAISearch(datastore=DATASTORE_RESOURCE_NAME))
     )
     tools_list = [search_tool]
-    print("Vertex AI 和 Google Cloud 客戶端初始化成功。")
+    print("Vertex AI 和 Google Cloud 客戶端初始化成功 (已設定 5 分鐘超時)。")
 
 except Exception as e:
     print(f"嚴重錯誤: 初始化 Google Cloud 客戶端失敗: {e}")
