@@ -85,7 +85,7 @@ class QuestionFeedback(BaseModel):
     student_answer: str
     is_correct: str
     comment: str
-    correct_answer: str
+    correct_answer: Union[str, List[str]]
     answer_source_query: str
     answer_source_content: str
 
